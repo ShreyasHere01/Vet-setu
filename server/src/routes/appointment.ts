@@ -18,6 +18,7 @@ router.post(
             id: Number(slotId),
           },
         });
+        
 
         if (!slot) {
           throw new Error("SLOT_NOT_FOUND");
@@ -26,6 +27,9 @@ router.post(
         if (slot.isBooked) {
           throw new Error("SLOT_ALREADY_BOOKED");
         }
+        if (slot.startTime < new Date()) {
+  throw new Error("SLOT_IN_PAST");
+}
 
         await tx.slot.update({
           where: {
@@ -58,6 +62,11 @@ router.post(
           error: "Slot not found",
         });
       }
+      if (error.message === "SLOT_IN_PAST") {
+  return res.status(400).json({
+    error: "Cannot book a slot in the past",
+  });
+}
 
       if (error.message === "SLOT_ALREADY_BOOKED") {
         return res.status(409).json({

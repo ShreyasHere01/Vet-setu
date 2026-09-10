@@ -1,6 +1,7 @@
 import prisma from "../lib/prisma";
 import express from "express";
 import { protect, requireRole } from "../middleware/auth";
+import { slotSchema } from "../schema/vet.schema";
 
 
 const router =express.Router();
@@ -43,7 +44,15 @@ router.post("/profile" , protect, requireRole("VET"),async (req:any, res)=>{
 router.post("/slots",protect, requireRole("VET"), async (req:any ,res)=>{
     try{
           
-      const {startTime , endTime}=req.body;
+     const result = slotSchema.safeParse(req.body);
+
+if (!result.success) {
+  return res.status(400).json({
+    error: result.error.issues[0].message,
+  });
+}
+
+const { startTime, endTime } = result.data; 
     
       const userId = req.user.userId;
 
