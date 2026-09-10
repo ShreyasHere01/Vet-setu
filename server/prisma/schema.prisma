@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String
+  createdAt DateTime @default(now())
+
+  vet          Vet?
+  appointments Appointment[] @relation("FarmerAppointments")
+  reviews      Review[]
+}
+
+model Vet {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @unique
+  user       User     @relation(fields: [userId], references: [id])
+  specialty  String
+  bio        String?
+  verified   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  slots        Slot[]
+  appointments Appointment[] @relation("VetAppointments")
+  reviews      Review[]
+}
+
+model Slot {
+  id        Int      @id @default(autoincrement())
+  vetId     Int
+  vet       Vet      @relation(fields: [vetId], references: [id])
+  startTime DateTime
+  endTime   DateTime
+  isBooked  Boolean  @default(false)
+
+  appointment Appointment?
+
+  @@unique([vetId, startTime])
+}
+
+model Appointment {
+  id        Int      @id @default(autoincrement())
+  farmerId  Int
+  farmer    User     @relation("FarmerAppointments", fields: [farmerId], references: [id])
+  vetId     Int
+  vet       Vet      @relation("VetAppointments", fields: [vetId], references: [id])
+  slotId    Int      @unique
+  slot      Slot     @relation(fields: [slotId], references: [id])
+  status    String   @default("PENDING") // PENDING, CONFIRMED, COMPLETED, CANCELLED
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  farmerId  Int
+  farmer    User     @relation(fields: [farmerId], references: [id])
+  vetId     Int
+  vet       Vet      @relation(fields: [vetId], references: [id])
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+}
