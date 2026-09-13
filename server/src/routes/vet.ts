@@ -121,6 +121,40 @@ router.get("/", async (req, res) => {
 });
 
 
+router.get("/:vetId", async (req, res) => {
+  try {
+    const vetId = Number(req.params.vetId);
+
+    const vet = await prisma.vet.findUnique({
+      where: {
+        id: vetId,
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!vet) {
+      return res.status(404).json({
+        error: "Vet not found",
+      });
+    }
+
+    res.json(vet);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Failed to fetch vet",
+    });
+  }
+});
+
 router.get("/:vetId/slots", async (req, res) => {
   try {
     const vetId = Number(req.params.vetId);

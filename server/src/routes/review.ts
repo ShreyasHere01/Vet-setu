@@ -5,6 +5,7 @@ import { reviewSchema } from "../schema/review.schema";
 
 const router = express.Router();
 
+// Create review for a completed appointment
 router.post(
   "/",
   protect,
@@ -19,27 +20,48 @@ router.post(
         });
       }
 
-      const { vetId, rating, comment } = result.data;
-      const userId=req.user.userId;
-      const hadAppointment = await prisma.appointment.findFirst({
+      const { appointmentId, rating, comment } = result.data;
+      const farmerId = req.user.userId;
+
+      // Check that this appointment belongs to the logged-in farmer
+      const appointment = await prisma.appointment.findFirst({
         where: {
-          farmerId: userId ,
-          vetId,
-          status: "COMPLETED",
+          id: appointmentId,
+          farmerId,
         },
       });
 
-      if (!hadAppointment) {
+      if (!appointment) {
+        return res.status(404).json({
+          error: "Appointment not found",
+        });
+      }
+
+      // Only completed appointments can be reviewed
+      if (appointment.status !== "COMPLETED") {
         return res.status(403).json({
-          error:
-            "You can only review vets you have completed an appointment with",
+          error: "You can only review completed appointments",
+        });
+      }
+
+      // Prevent duplicate review for the same appointment
+      const existingReview = await prisma.review.findUnique({
+        where: {
+          appointmentId,
+        },
+      });
+
+      if (existingReview) {
+        return res.status(409).json({
+          error: "You have already reviewed this appointment",
         });
       }
 
       const review = await prisma.review.create({
         data: {
-          farmerId: req.user.userId,
-          vetId,
+          farmerId,
+          vetId: appointment.vetId,
+          appointmentId,
           rating,
           comment,
         },
@@ -48,7 +70,6 @@ router.post(
       res.status(201).json(review);
     } catch (error) {
       console.error(error);
-
       res.status(500).json({
         error: "Failed to create review",
       });
@@ -56,6 +77,7 @@ router.post(
   }
 );
 
+// Get all reviews for a vet
 router.get("/vet/:vetId", async (req, res) => {
   try {
     const vetId = Number(req.params.vetId);
@@ -79,7 +101,6 @@ router.get("/vet/:vetId", async (req, res) => {
     res.json(reviews);
   } catch (error) {
     console.error(error);
-
     res.status(500).json({
       error: "Failed to fetch reviews",
     });

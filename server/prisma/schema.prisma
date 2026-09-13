@@ -57,15 +57,21 @@ model Appointment {
   status    String   @default("PENDING") // PENDING, CONFIRMED, COMPLETED, CANCELLED
   notes     String?
   createdAt DateTime @default(now())
+    review    Review?
 }
 
 model Review {
-  id        Int      @id @default(autoincrement())
-  farmerId  Int
-  farmer    User     @relation(fields: [farmerId], references: [id])
-  vetId     Int
-  vet       Vet      @relation(fields: [vetId], references: [id])
-  rating    Int
-  comment   String?
-  createdAt DateTime @default(now())
+  id            Int         @id @default(autoincrement())
+  farmerId      Int
+  farmer        User        @relation(fields: [farmerId], references: [id])
+
+  vetId         Int
+  vet           Vet         @relation(fields: [vetId], references: [id])
+
+  appointmentId Int         @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+
+  rating        Int
+  comment       String?
+  createdAt     DateTime    @default(now())
 }
