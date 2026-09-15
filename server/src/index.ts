@@ -1,10 +1,14 @@
 import express from "express";
 import cors from "cors";
+import http from "http";
+import { WebSocketServer } from "ws";
 
 import authRoutes from "./routes/auth";
 import vetRoutes from "./routes/vet";
 import appointmentRoutes from "./routes/appointment";
 import reviewRoutes from "./routes/review";
+import { errorHandler } from "./middleware/errorHandler";
+import { setupWebSocket } from "./websocket";
 
 const app = express();
 
@@ -15,7 +19,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/vets", vetRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/reviews", reviewRoutes);
-import { errorHandler } from "./middleware/errorHandler";
 
 app.get("/", (req, res) => {
   res.json({
@@ -25,8 +28,19 @@ app.get("/", (req, res) => {
 
 app.use(errorHandler);
 
+// Create HTTP server
+const server = http.createServer(app);
+
+// Create WebSocket server on same port
+const wss = new WebSocketServer({
+  server,
+});
+
+// Setup WebSocket logic
+setupWebSocket(wss);
+
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`HTTP + WebSocket server running on port ${PORT}`);
 });

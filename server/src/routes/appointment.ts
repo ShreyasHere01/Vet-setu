@@ -1,6 +1,7 @@
 import express from "express";
 import prisma from "../lib/prisma";
 import { protect, requireRole } from "../middleware/auth";
+import { sendToUser } from "../websocket";
 
 const router = express.Router();
 
@@ -233,6 +234,13 @@ router.patch(
             status,
           },
         });
+
+      
+      sendToUser(appointment.farmerId, {
+        type: "appointment:updated",
+        appointmentId: updatedAppointment.id,
+        status: updatedAppointment.status,
+      });
 
       res.json(updatedAppointment);
     } catch (error) {
