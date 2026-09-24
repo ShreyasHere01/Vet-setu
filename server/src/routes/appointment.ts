@@ -1,4 +1,5 @@
 import express from "express";
+
 import prisma from "../lib/prisma";
 import { protect, requireRole } from "../middleware/auth";
 import { sendToUser } from "../websocket";
@@ -10,13 +11,30 @@ router.post(
   protect,
   requireRole("FARMER"),
   async (req: any, res) => {
-    const { slotId } = req.body;
-
     try {
-      const appointment = await prisma.$transaction(async (tx) => {
+      const farmerId = req.user.userId;
+
+      const {
+        slotId,
+        visitLocationName,
+        visitAddress,
+        visitLatitude,
+        visitLongitude,
+      } = req.body;
+
+      if (!slotId) {
+        return res.status(400).json({
+          error: "Slot ID is required",
+        });
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
         const slot = await tx.slot.findUnique({
           where: {
             id: Number(slotId),
+          },
+          include: {
+            vet: true,
           },
         });
 
@@ -28,56 +46,201 @@ router.post(
           throw new Error("SLOT_ALREADY_BOOKED");
         }
 
-        if (slot.startTime < new Date()) {
-          throw new Error("SLOT_IN_PAST");
+        const appointmentType =
+          slot.appointmentType || "CLINIC";
+
+        let finalVisitLocationName: string | null = null;
+        let finalVisitAddress: string | null = null;
+        let finalVisitLatitude: number | null = null;
+        let finalVisitLongitude: number | null = null;
+
+        if (appointmentType === "FARM_VISIT") {
+          if (
+            !visitLocationName ||
+            !visitLocationName.trim()
+          ) {
+            throw new Error(
+              "VISIT_LOCATION_NAME_REQUIRED"
+            );
+          }
+
+          if (
+            !visitAddress ||
+            !visitAddress.trim()
+          ) {
+            throw new Error(
+              "VISIT_ADDRESS_REQUIRED"
+            );
+          }
+
+          finalVisitLocationName =
+            visitLocationName.trim();
+
+          finalVisitAddress = visitAddress.trim();
+
+          finalVisitLatitude =
+            visitLatitude !== null &&
+            visitLatitude !== undefined
+              ? Number(visitLatitude)
+              : null;
+
+          finalVisitLongitude =
+            visitLongitude !== null &&
+            visitLongitude !== undefined
+              ? Number(visitLongitude)
+              : null;
+
+          if (
+            finalVisitLatitude !== null &&
+            (Number.isNaN(finalVisitLatitude) ||
+              finalVisitLatitude < -90 ||
+              finalVisitLatitude > 90)
+          ) {
+            throw new Error(
+              "INVALID_VISIT_LATITUDE"
+            );
+          }
+
+          if (
+            finalVisitLongitude !== null &&
+            (Number.isNaN(finalVisitLongitude) ||
+              finalVisitLongitude < -180 ||
+              finalVisitLongitude > 180)
+          ) {
+            throw new Error(
+              "INVALID_VISIT_LONGITUDE"
+            );
+          }
         }
 
-        await tx.slot.update({
-          where: {
-            id: slot.id,
-          },
-          data: {
-            isBooked: true,
-          },
-        });
+        const updatedSlot =
+          await tx.slot.updateMany({
+            where: {
+              id: Number(slotId),
+              isBooked: false,
+            },
+            data: {
+              isBooked: true,
+            },
+          });
 
-        return tx.appointment.create({
-          data: {
-            farmerId: req.user.userId,
-            vetId: slot.vetId,
-            slotId: slot.id,
-            status: "PENDING",
-          },
-        });
+        if (updatedSlot.count !== 1) {
+          throw new Error("SLOT_ALREADY_BOOKED");
+        }
+
+        const appointment =
+          await tx.appointment.create({
+            data: {
+              farmerId,
+              vetId: slot.vetId,
+              slotId: Number(slotId),
+              status: "PENDING",
+              appointmentType,
+              visitLocationName:
+                finalVisitLocationName,
+              visitAddress: finalVisitAddress,
+              visitLatitude: finalVisitLatitude,
+              visitLongitude: finalVisitLongitude,
+            },
+            include: {
+              slot: true,
+              vet: {
+                include: {
+                  user: {
+                    select: {
+                      name: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+        const notification =
+          await tx.notification.create({
+            data: {
+              userId: slot.vet.userId,
+              type: "APPOINTMENT_BOOKED",
+              message:
+                "A farmer has booked a new appointment with you.",
+            },
+          });
+
+        return {
+          appointment,
+          notification,
+          vetUserId: slot.vet.userId,
+        };
       });
 
-      res.status(201).json({
-        message: "Appointment booked successfully",
-        appointment,
+      sendToUser(result.vetUserId, {
+        type: "notification:new",
+        notification: {
+          id: result.notification.id,
+          type: result.notification.type,
+          message: result.notification.message,
+          read: result.notification.read,
+          createdAt: result.notification.createdAt,
+        },
       });
+
+      res.status(201).json(result.appointment);
     } catch (error: any) {
       console.error(error);
 
       if (error.message === "SLOT_NOT_FOUND") {
         return res.status(404).json({
-          error: "Slot not found",
+          error: "Appointment slot not found",
         });
       }
 
-      if (error.message === "SLOT_IN_PAST") {
-        return res.status(400).json({
-          error: "Cannot book a slot in the past",
-        });
-      }
-
-      if (error.message === "SLOT_ALREADY_BOOKED") {
+      if (
+        error.message === "SLOT_ALREADY_BOOKED"
+      ) {
         return res.status(409).json({
-          error: "This slot is already booked",
+          error:
+            "This appointment slot has already been booked",
+        });
+      }
+
+      if (
+        error.message ===
+        "VISIT_LOCATION_NAME_REQUIRED"
+      ) {
+        return res.status(400).json({
+          error: "Visit location name is required",
+        });
+      }
+
+      if (
+        error.message === "VISIT_ADDRESS_REQUIRED"
+      ) {
+        return res.status(400).json({
+          error: "Visit address is required",
+        });
+      }
+
+      if (
+        error.message ===
+        "INVALID_VISIT_LATITUDE"
+      ) {
+        return res.status(400).json({
+          error: "Invalid visit latitude",
+        });
+      }
+
+      if (
+        error.message ===
+        "INVALID_VISIT_LONGITUDE"
+      ) {
+        return res.status(400).json({
+          error: "Invalid visit longitude",
         });
       }
 
       res.status(500).json({
-        error: "Booking failed",
+        error: "Failed to book appointment",
       });
     }
   }
@@ -89,39 +252,44 @@ router.get(
   requireRole("FARMER"),
   async (req: any, res) => {
     try {
-      const appointments = await prisma.appointment.findMany({
-        where: {
-          farmerId: req.user.userId,
-        },
-        include: {
-          slot: true,
-          vet: {
-            include: {
-              user: {
-                select: {
-                  name: true,
+      const appointments =
+        await prisma.appointment.findMany({
+          where: {
+            farmerId: req.user.userId,
+          },
+          include: {
+            slot: true,
+            vet: {
+              include: {
+                user: {
+                  select: {
+                    name: true,
+                    email: true,
+                  },
                 },
               },
             },
-          },
-          review: {
-            select: {
-              id: true,
+            review: {
+              select: {
+                id: true,
+              },
             },
           },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
+          orderBy: {
+            slot: {
+              startTime: "desc",
+            },
+          },
+        });
 
-      const result = appointments.map((appointment) => ({
-        ...appointment,
-        hasReview: appointment.review !== null,
-        review: undefined,
-      }));
+      const transformedAppointments =
+        appointments.map((appointment) => ({
+          ...appointment,
+          hasReview: !!appointment.review,
+          review: undefined,
+        }));
 
-      res.json(result);
+      res.json(transformedAppointments);
     } catch (error) {
       console.error(error);
 
@@ -150,30 +318,35 @@ router.get(
         });
       }
 
-      const appointments = await prisma.appointment.findMany({
-        where: {
-          vetId: vet.id,
-        },
-        include: {
-          slot: true,
-          farmer: {
-            select: {
-              name: true,
-              email: true,
+      const appointments =
+        await prisma.appointment.findMany({
+          where: {
+            vetId: vet.id,
+          },
+          include: {
+            farmer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                photoUrl: true,
+              },
+            },
+            slot: true,
+          },
+          orderBy: {
+            slot: {
+              startTime: "desc",
             },
           },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
+        });
 
       res.json(appointments);
     } catch (error) {
       console.error(error);
 
       res.status(500).json({
-        error: "Failed to fetch appointments",
+        error: "Failed to fetch vet appointments",
       });
     }
   }
@@ -185,13 +358,23 @@ router.patch(
   requireRole("VET"),
   async (req: any, res) => {
     try {
-      const appointmentId = Number(req.params.id);
+      const appointmentId = Number(
+        req.params.id
+      );
+
       const { status } = req.body;
 
+      if (!status) {
+        return res.status(400).json({
+          error: "Status is required",
+        });
+      }
+
       const allowedStatuses = [
+        "PENDING",
         "CONFIRMED",
-        "CANCELLED",
         "COMPLETED",
+        "CANCELLED",
       ];
 
       if (!allowedStatuses.includes(status)) {
@@ -200,28 +383,45 @@ router.patch(
         });
       }
 
-      const vet = await prisma.vet.findUnique({
-        where: {
-          userId: req.user.userId,
-        },
-      });
-
-      if (!vet) {
-        return res.status(404).json({
-          error: "Vet profile not found",
+      const appointment =
+        await prisma.appointment.findUnique({
+          where: {
+            id: appointmentId,
+          },
+          include: {
+            vet: true,
+          },
         });
-      }
-
-      const appointment = await prisma.appointment.findFirst({
-        where: {
-          id: appointmentId,
-          vetId: vet.id,
-        },
-      });
 
       if (!appointment) {
         return res.status(404).json({
           error: "Appointment not found",
+        });
+      }
+
+      if (
+        appointment.vet.userId !==
+        req.user.userId
+      ) {
+        return res.status(403).json({
+          error:
+            "You do not have permission to update this appointment",
+        });
+      }
+
+      const currentStatus =
+        appointment.status;
+
+      const validTransition =
+        (currentStatus === "PENDING" &&
+          (status === "CONFIRMED" ||
+            status === "CANCELLED")) ||
+        (currentStatus === "CONFIRMED" &&
+          status === "COMPLETED");
+
+      if (!validTransition) {
+        return res.status(400).json({
+          error: `Cannot change appointment status from ${currentStatus} to ${status}`,
         });
       }
 
@@ -233,13 +433,50 @@ router.patch(
           data: {
             status,
           },
+          include: {
+            slot: true,
+            vet: {
+              include: {
+                user: {
+                  select: {
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
         });
 
-      
+      const notification =
+        await prisma.notification.create({
+          data: {
+            userId: appointment.farmerId,
+            type: "APPOINTMENT_STATUS_UPDATED",
+            message:
+              status === "CONFIRMED"
+                ? "Your appointment has been confirmed."
+                : status === "CANCELLED"
+                  ? "Your appointment has been cancelled."
+                  : "Your appointment has been completed.",
+          },
+        });
+
+      sendToUser(appointment.farmerId, {
+        type: "notification:new",
+        notification: {
+          id: notification.id,
+          type: notification.type,
+          message: notification.message,
+          read: notification.read,
+          createdAt: notification.createdAt,
+        },
+      });
+
       sendToUser(appointment.farmerId, {
         type: "appointment:updated",
-        appointmentId: updatedAppointment.id,
-        status: updatedAppointment.status,
+        appointmentId: appointment.id,
+        status,
       });
 
       res.json(updatedAppointment);

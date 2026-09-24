@@ -7,7 +7,7 @@ export const reviewSchema = z.object({
     .min(1, "Please select a rating"),
   comment: z
     .string()
-    .max(500, "Comment must be less than 500 characters")
+    .max(500, "Comment must be less than 500 characters or less")
     .optional(),
 });
 

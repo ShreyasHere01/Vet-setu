@@ -7,12 +7,12 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let shouldReconnect = true;
 
 export async function connectWebSocket() {
+  shouldReconnect = true;
+
   try {
     const response = await api.post("/auth/ws-ticket");
-
     const ticket = response.data.ticket;
 
-    // Prevent duplicate connections
     if (
       socket?.readyState === WebSocket.OPEN ||
       socket?.readyState === WebSocket.CONNECTING
@@ -31,22 +31,43 @@ export async function connectWebSocket() {
     };
 
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      try {
+        const data = JSON.parse(event.data);
 
-      console.log("WebSocket message:", data);
+        console.log("WebSocket message:", data);
 
-      if (data.type === "appointment:updated") {
-        // Refresh farmer's appointment data
-        queryClient.invalidateQueries({
-          queryKey: ["my-appointments"],
-        });
+        if (data.type === "appointment:updated") {
+          queryClient.invalidateQueries({
+            queryKey: ["my-appointments"],
+          });
 
-        // Show notification
-        useNotificationStore
-          .getState()
-          .showNotification(
-            `Appointment ${data.status.toLowerCase()}`
-          );
+          let message = "";
+
+          if (data.status === "CONFIRMED") {
+            message = "Your appointment has been confirmed.";
+          } else if (data.status === "CANCELLED") {
+            message = "Your appointment has been cancelled.";
+          } else if (data.status === "COMPLETED") {
+            message = "Your appointment has been completed.";
+          } else {
+            message = `Appointment status updated to ${data.status}.`;
+          }
+
+          useNotificationStore
+            .getState()
+            .showNotification(message);
+        }
+
+        if (data.type === "notification:new") {
+          queryClient.invalidateQueries({
+            queryKey: ["notifications"],
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Failed to process WebSocket message:",
+          error
+        );
       }
     };
 
@@ -66,7 +87,10 @@ export async function connectWebSocket() {
       console.error("WebSocket error:", error);
     };
   } catch (error) {
-    console.error("Failed to create WebSocket ticket:", error);
+    console.error(
+      "Failed to create WebSocket ticket:",
+      error
+    );
 
     if (shouldReconnect) {
       reconnectTimer = setTimeout(() => {

@@ -1,42 +1,43 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-
-interface User{
-    id:number,
-    name:string,
-    email:string,
-    role:string
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
 }
 
-interface AuthState{
-    user:User | null;
-    token:string | null;
-    login:(user:User,token:string)=>void;
-    logout:()=>void;
+interface AuthState {
+  user: User | null;
+  token: string | null;
 
+  login: (user: User, token: string) => void;
+  logout: () => void;
 }
 
-export const useAuthStore =create<AuthState>((set)=>({
-     user:   JSON.parse(localStorage.getItem("user")|| "null"),
-     token:localStorage.getItem("token"),
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
 
-     login:(user,token)=>{
-        localStorage.setItem("user",JSON.stringify(user));
-        localStorage.setItem("token",token);
-
-
+      login: (user, token) => {
         set({
-            user,
-            token
-        })
-     },
-     logout:()=>{
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
+          user,
+          token,
+        });
+      },
 
+      logout: () => {
         set({
-            user:null,
-            token:null,
-        })
-     }
-}));
+          user: null,
+          token: null,
+        });
+      },
+    }),
+    {
+      name: "vet-setu-auth",
+    }
+  )
+);
