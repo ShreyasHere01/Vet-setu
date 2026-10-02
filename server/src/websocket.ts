@@ -5,10 +5,14 @@ const connections = new Map<number, WebSocket>();
 
 export function setupWebSocket(wss: WebSocketServer) {
   wss.on("connection", (socket, req) => {
-    // Check that the connection comes from our frontend
     const origin = req.headers.origin;
 
-    if (origin !== "http://localhost:5173") {
+    const allowedOrigins = [
+      "http://localhost:5173",
+      "https://vet-setu-1.onrender.com",
+    ];
+
+    if (origin && !allowedOrigins.includes(origin)) {
       socket.close(1008, "Invalid origin");
       return;
     }

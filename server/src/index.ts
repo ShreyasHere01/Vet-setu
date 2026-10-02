@@ -16,7 +16,14 @@ import notificationRoutes from "./routes/notification";
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://vet-setu-1.onrender.com",
+    ],
+  })
+);
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
