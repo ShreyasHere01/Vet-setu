@@ -4,6 +4,7 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from "react-router-dom";
 
 import { useAuthStore } from "./store/authStore";
@@ -44,8 +45,18 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import FarmerProfile from "./pages/FarmerProfile";
 
-export default function App() {
+function AppContent() {
   const token = useAuthStore((state) => state.token);
+  const location = useLocation();
+
+  const authPages = [
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/reset-password",
+  ];
+
+  const isAuthPage = authPages.includes(location.pathname);
 
   useEffect(() => {
     if (!token) {
@@ -61,9 +72,9 @@ export default function App() {
   }, [token]);
 
   return (
-    <BrowserRouter>
-     {token && <Navbar />}
-      {token && <Notification />}
+    <>
+      {token && !isAuthPage && <Navbar />}
+      {token && !isAuthPage && <Notification />}
 
       <Routes>
         <Route
@@ -190,6 +201,14 @@ export default function App() {
           />
         </Route>
       </Routes>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   );
 }
