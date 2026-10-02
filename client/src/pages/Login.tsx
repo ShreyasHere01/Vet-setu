@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
@@ -189,7 +195,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => navigate("/forgot-password")}
-                      className="text-sm font-semibold text-[#0D5E72] transition hover:text-[#094A5A]"
+                      className="rounded-md px-2 py-1 text-sm font-semibold text-[#0D5E72] transition hover:bg-[#E8F5F7] hover:text-[#094A5A] hover:underline"
                     >
                       Forgot password?
                     </button>
@@ -257,7 +263,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => navigate("/signup")}
-                  className="font-semibold text-[#0D5E72] hover:text-[#094A5A]"
+                  className="rounded-md px-2 py-1 font-semibold text-[#0D5E72] transition hover:bg-[#E8F5F7] hover:text-[#094A5A] hover:underline"
                 >
                   Create an account
                 </button>

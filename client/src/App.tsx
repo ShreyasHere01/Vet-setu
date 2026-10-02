@@ -62,8 +62,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Navbar />
-      <Notification />
+     {token && <Navbar />}
+      {token && <Notification />}
 
       <Routes>
         <Route
