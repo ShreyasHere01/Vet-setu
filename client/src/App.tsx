@@ -3,6 +3,7 @@ import {
   BrowserRouter,
   Routes,
   Route,
+  Navigate,
 } from "react-router-dom";
 
 import { useAuthStore } from "./store/authStore";
@@ -65,7 +66,10 @@ export default function App() {
       <Notification />
 
       <Routes>
-        {/* Public Routes */}
+        <Route
+          path="/"
+          element={<Navigate to="/login" replace />}
+        />
 
         <Route
           path="/login"
@@ -87,8 +91,6 @@ export default function App() {
           element={<ResetPassword />}
         />
 
-        {/* Any Logged-in User */}
-
         <Route element={<ProtectedRoute />}>
           <Route
             path="/dashboard"
@@ -101,13 +103,9 @@ export default function App() {
           />
         </Route>
 
-        {/* Farmer Routes */}
-
         <Route
           element={
-            <ProtectedRoute
-              allowedRoles={["FARMER"]}
-            />
+            <ProtectedRoute allowedRoles={["FARMER"]} />
           }
         >
           <Route
@@ -129,8 +127,6 @@ export default function App() {
             path="/create-review"
             element={<CreateReview />}
           />
-
-          {/* Animal Routes */}
 
           <Route
             path="/animals"
@@ -163,13 +159,9 @@ export default function App() {
           />
         </Route>
 
-        {/* Vet Routes */}
-
         <Route
           element={
-            <ProtectedRoute
-              allowedRoles={["VET"]}
-            />
+            <ProtectedRoute allowedRoles={["VET"]} />
           }
         >
           <Route
@@ -191,10 +183,11 @@ export default function App() {
             path="/vet/reviews"
             element={<VetReviews />}
           />
+
           <Route
-  path="/vet/farmer/:userId"
-  element={<FarmerProfile />}
-/>
+            path="/vet/farmer/:userId"
+            element={<FarmerProfile />}
+          />
         </Route>
       </Routes>
     </BrowserRouter>
